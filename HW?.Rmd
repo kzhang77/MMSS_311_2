@@ -1,0 +1,17 @@
+---
+title: "HW_2"
+output: html_document
+---
+
+```{r}
+install.packages("rvest")
+library(rvest)
+install.packages("xml2")
+library(xml2)
+library(dplyr)
+```
+
+```{r}
+read_html("https://en.wikipedia.org/wiki/Category:Member_states_of_the_Association_of_Southeast_Asian_Nations")
+```
+

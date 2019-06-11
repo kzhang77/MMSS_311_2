@@ -1,0 +1,118 @@
+---
+title: "Final"
+header-includes:
+    - \usepackage{setspace}\doublespacing
+output: pdf_document
+---
+  The problem of heavy oil and coal consumption has and continues to plague the earth in many ways. In particular, the sudden burst in greenhouse gas emissions over the past serveral decades hold significant implications towards the acceleration of climate change and the negative effects that come with it. While the necessity to transition into more environmental-friendly sources of energy may be clear to some, the monetary benefits of maintaining nonrenewable energy consumption have disincentivized nations from creating policies to doing so. As a result, the purpose of the current study is to observe the potential connections between the major energy sources and GDP growth, in order to gauge how economically effective these nonrenewables really are in relation to alternative methods. In addition, I will attempt to measure the economic plausability of the environmental initiative for carbon taxing, what carbon prices bring about the most growth in GDP, and the relevance of per-person carbon emmission rates in economic growth, in hopes of locating viable environmental-friendly actions that can be taken without harming economic growth.
+  My analysis will draw from several sources of data, containing the growth rate of GDP, oil production, coal consumption, natural gas consumption, and renewables consumption accross 44 countries. In addition, I will utilize data containing information of carbon prices and growth in CO2 emission per capita.
+```{r, results = "hide"}
+Packages <-c("readr","dplyr", "ggplot2", "broom", "glmnet")
+lapply(Packages, library, character.only = TRUE)
+
+coal <- read_csv("Downloads/Coal.csv")
+oil <- read_csv("Downloads/crude oil.csv")
+oil <- oil[-c(44, 45), ]
+# This is just to remove the extraneous NA rows on the bottom without removing the NA in the dataset
+ngas <- read_csv("Downloads/natural gas.csv")
+ngas <- ngas[-c(45), ]
+renew <- read_csv("Downloads/Renewables.csv")
+gdpgrowth <- read_csv("Downloads/GDP rates 2017.csv")
+gdpgrowth <- na.omit(gdpgrowth)
+
+countries <- NULL
+nations <- c(coal$Country)
+coal <- c(coal$Rate)
+ngas <- c(ngas$Rate)
+oil <- c(oil$Rate)
+renew <- c(renew$Rate)
+
+countries <- data.frame(nations, coal, ngas, oil, renew)
+
+
+countries[is.na(countries)] <- 0
+```
+
+
+```{r}
+samecountry <- countries$nations[countries$nations %in% gdpgrowth$`Country Name`]
+
+countries <- subset(countries, (nations %in% samecountry))
+gdpgrowth <- subset(gdpgrowth, (`Country Name` %in% samecountry))
+countries$gdpgrowth <- gdpgrowth$`2017`
+#The purpose of these lines is to fit the dataframes so that the nations that both sets have are isolated and combined
+```
+
+  To begin with, the first step I take in analyzing the proposed connection between the different energy sources is to take an OLS regression between GDP growth, as the dependent variable, with respect to the four main energy sources. Doing so will provide a sense of the linear relationship between GDP and the energy sources over 44 countries. The results (shown below) reveal a small positive relationship between all four sources and GDP with natural gasses as the largest contributor. However, there are several things to consider before drawing conclusions. First, the positive connection between GDP and renewable sources may be in part attributed to the tendency of wealthier nations to pursue alternative resource consumption. Nations that have more economical leeway are more likely to pursue alternative energy sources. On the other hand, the high variance in this OLS regression is an issue to consider, as the standard errors of the coefficients are relatively large. Furthermore, it may be helpful to try an alternative approach in measuring the relationship between these variables and compare the results.
+```{r}
+olsall <- lm(formula = countries$gdpgrowth ~ countries$coal + countries$ngas + countries$oil + countries$renew)
+summary(olsall)
+```
+  In order to address the second aspect of my research question, I include two datasets containing information on the CO2 emission per capita and price on carbon. The CO2 emission per capita provides an outlook on the change of a nation's quality of life, as citizens of countries with a higher CO2 emission per capita rate tend to have more comfortable lives. The carbon prices represent legitimate national initiatives taken to approach environmental issues, and an analysis on the implications of raising/lowering the prices on carbon may prove valuable for political actors seeking to find the ideal price point for carbon. Due to the limited number of countries with clear carbon taxes in place, the sample size is thus reduced to 12 countries.
+```{r}
+percapita <- read_csv("Downloads/percapita.csv")
+cprice <- read_csv("Downloads/Carbon Prices.csv")
+cprice <- cprice[, -c(3:8)]
+
+samecountry2 <- countries$nations[countries$nations %in% percapita$country_name]
+percapita <- subset(percapita, (country_name %in% samecountry2))
+countries2 <- subset(countries, (nations %in% samecountry2))
+countries2$percap <- percapita$X4
+samecountry3 <- countries2$nations[countries2$nations %in% cprice$Country]
+countries2 <- subset(countries2, (nations %in% samecountry3))
+cprice <- subset(cprice, (Country %in% samecountry3))
+countries2$carpr <- cprice$Price
+View(countries2)
+```
+  The next course of action is to run an OLS regression again to gain a comprehensive understanding of how the linear relationships change when these two additional variables are introduced. The coefficients for the initial four energy sources undergo a noticeable change: coal, natural gasses, and renewable energy have a slightly negative linear relationship with GDP for these twelve countries. As expected, carbon prices and GDP growth are inversely related; however, the coefficient for CO2 emissions per capita holds a significantly lower coefficient than the rest. This will be examined in detail after a ridge regression is run. Granted, with the low sample size and clear collinearity between these variables, this infomation may not necessarily be indicative of the actual relationships between the variables. Similar to the previous OLS, the variance is quite high in this regression; thus, we will account for this by running a ridge regression. There are several benefits of utilizing a ridge regression over the OLS. The sacrifice of unbiasedness in favor of variance increases the predicive ability of the regression, which may prove valuable when observing the effects of manipulating carbon prices. In addition, the problem of collinearity in the previous OLS regressions is be accounted for by the ridge regression, which will be useful in addressing the connections between carbon emission per capita, carbon tax prices, and oil production. Thus, comparing the results for our ridge regression and previous two OLS regressions may prove useful in isolating the relevant variables and which variables have a consistent coefficient for GDP growth.
+```{r}
+olsall2 <- lm(formula = countries2$gdpgrowth ~ countries2$coal + countries2$ngas + countries2$oil + countries2$renew + countries2$percap + countries2$carpr)
+summary(olsall2)
+```
+In the following chunks, I run the ridge regression for GDP growth with respect to the six dependent variables. I then plot the relationship between lambda and the estimate in order to provide a visual representation of the change in coefficients with respect to changes in the penalization coefficient. Due to the significant change in the coefficient for per capita carbon emission compared to the other variables, I include an additional plot with the y axis spanning from -.1 to .1 in order to capture the change in the other 5 variables.
+```{r}
+allstats <- as.matrix(countries2[, -c(1,6)])
+lambda <- 10 ^ seq(-2, 1.5, length = 25)
+countryridge <- glmnet(x = allstats, y = countries2$gdpgrowth, alpha = 0, lambda = lambda)
+ridge_output <- broom::tidy(countryridge)
+head(ridge_output, 12)
+```
+
+```{r}
+ridge_output %>%
+filter(term != '(Intercept)') %>%
+ggplot(aes(x = lambda, y = estimate, group = term, color = term)) +
+geom_line()
+```
+
+```{r}
+ridge_output %>%
+filter(term != '(Intercept)') %>%
+ggplot(aes(x = lambda, y = estimate, group = term, color = term)) +
+geom_line() + ylim(-.1, .1)
+```
+The next step in my ridge regression is to locate the point in which the Marginal Squared Error is minimized. The following plot reveals that after lambda reaches ~4, the MSE reaches its lowest point and stays there. The "lambda.min" aspect of "ridgelam" reveals the values of lambda that minimize MSE; however, since there are many points in which this is the case I will choose the smallest point that "ridgelam$lambda.min" has generated: 4.216964. As a result, I will hide the result that this particular knit displays.
+```{r, results = "hide"}
+ridgelam <- cv.glmnet(x = allstats, y = countries2$gdpgrowth, alpha = 0, nfolds = 4, lambda = lambda)
+ridgelam$lambda.min
+```
+
+```{r}
+broom::tidy(ridgelam) %>%
+filter(lambda < 25) %>%
+ggplot(aes(x = lambda, y = estimate)) +
+geom_line() +
+geom_vline(xintercept = ridgelam$lambda.min,
+linetype = 'dashed') +
+labs(y = 'MSE')
+```
+ 
+```{r}
+finalridge <- glmnet(x = allstats, y = countries2$gdpgrowth, alpha = 0, lambda = 4.216965)
+coef(finalridge)
+```
+ As a result, a comparison of the ridge regression with respect to the previous regression results may provide valuable insight on the relationship between GDP growth and the dependent variables. The most glaring difference between the ridge results and the OLS estimator is that of per capita carbon emissions, increasing from -29.2 to -5.28. This exposes the disadvantage of OLS regarding collinearity; that is, the unnaturally high OLS coefficient for the "percap" variable may very well be due to its relation to the other dependent variables. There are also slight decreases in coal and oil coefficients, as well as increases in estimates for natural gas, renewable energy, and carbon price. Relating to the initial OLS ran for the initial four variables, the coefficients of all four energy sources are significantly lower in the ridge regression. While a portion of this should be due to the the fact that the latter results include more variables, three of the four positive relationships suggested by the initial OLS are now negative under the ridge regression model. 
+ 
+ As far as interpretation and conclusions go, there is only so much that we can currently take from this study. The inverse relationship between coal and GDP is unexpected and may potentially be a relationship to look into; however, the the sample size of countries is currently too small to allow for interpretation. The same can be said for the implications carbon pricing; namely, the low magnitude of its negative coefficient seems promising for the future of carbon tax implementations. However, with only 12 nations to gather data from, this statistic will be improved upon as more countries begin testing carbon taxation. In addition, the inverse relationship between change in per capita CO2 emissions and GDP growth is somewhat surprising, as one would expect countries with higher individual carbon emissions to have higher economic growth. 
+ 
+ Regarding the utilization of ridge regression, we were able to "fix" the clear outlying coefficient for per capita emissions in the OLS regression. However, ridge regressions are most effective when there are significantly more independent variables to consider. As a result, the improvement of future tests regarding our current research question will involve the addition of more independent variables to consider, as well as a substantial increase in the sample size of countries.

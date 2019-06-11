@@ -1,0 +1,286 @@
+---
+title: "HW22"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+install.packages("xml2")
+install.packages("rvest")
+library(xml2)
+library(rvest)
+```
+
+```{r}
+ASEAN <- read_html("/Users/kevinzhang/Desktop/ASEAN.html")
+```
+
+```{r}
+html_nodes(ASEAN, "li a")
+lol <- html_nodes(ASEAN, "li a")
+```
+
+```{r}
+html_text(Nodes)
+html_attr(Nodes, "href")
+trump <-html_text(Nodes)
+hilary <-html_attr(Nodes, "href")
+sanders <- url_absolute(hilary,"https://en.wikipedia.org/wiki/Category:Member_states_of_the_Association_of_Southeast_Asian_Nations")
+cbind(trump, sanders)
+c<-cbind(trump, sanders)
+as.data.frame(c)
+mark <- as.data.frame(c, stringsAsFactors = F)
+improvedmark <- mark[c(3:12), ]
+```
+
+```{r}
+for(i in 1:10){
+improvedmark$fulltxt[i] <- improvedmark$sanders[i] %>%
+read_html() %>%
+html_nodes('div p') %>%
+html_text() %>%
+paste(collapse = '\n')
+}
+```
+
+```{r}
+install.packages("tidytext")
+install.packages("tm")
+install.packages("stringr")
+install.packages("SnowballC")
+library(SnowballC)
+library(stringr)
+library(tm)
+library(tidytext)
+library(dplyr)
+```
+
+```{r}
+library(readr)
+trumptweets <- read_csv("Downloads/trumptweets.csv")
+View(trumptweets)
+trumpv <- VCorpus(VectorSource(as.vector(trumptweets$text)))
+trumpv
+trumpv <- tm_map(trumpv, content_transformer(removePunctuation))
+trumpv <- tm_map(trumpv, content_transformer(tolower))
+trumpv <- tm_map(trumpv, removeWords, stopwords("english"))
+trumpv <- tm_map(trumpv, content_transformer(stemDocument), language = "english")
+trumpv <- tm_map(trumpv, content_transformer(stripWhitespace))
+```
+
+```{r}
+trumpdoc <- DocumentTermMatrix(trumpv, control = list(wordLengths = c(2, Inf)))
+trumpdoc <- removeSparseTerms(trumpdoc, .99)
+```
+
+```{r}
+install.packages("broom")
+library(broom)
+tidytrump <- tidy(trumpdoc)
+trumpmat <- as.matrix(tidytrump)
+```
+
+
+
+```{r}
+trump_idf <- tidytrump %>%
+  bind_tf_idf(term, document, count)
+trump_idf
+```
+
+```{r}
+install.packages("ggplot2")
+library(ggplot2)
+tidytrump %>% group_by(term) %>%
+  summarize(freq = sum(count)) %>%
+  top_n(20, freq) %>%
+  arrange(desc(freq)) %>%
+  ggplot(aes(reorder(term, -freq), freq)) +
+  geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  xlab("word")
+
+```
+
+```{r}
+install.packages("lubridate")
+library(lubridate)
+tweetdate <- as.Date(trumptweets$created_at, format= "%m-%d-%Y")
+trump_beforeapocalypse <- subset(trumptweets, tweetdate>= "2010-01-12" & tweetdate < "2016-11-08")
+trump_afterapocalypse <- subset(trumptweets, tweetdate>= "2016-11-08" & tweetdate < "2018-1-31")
+```
+
+```{r}
+trump_before <- VCorpus(VectorSource(as.vector(trump_beforeapocalypse$text)))
+trump_before
+trump_before <- tm_map(trump_before, content_transformer(removePunctuation))
+trump_before <- tm_map(trump_before, content_transformer(tolower))
+trump_before <- tm_map(trump_before, removeWords, stopwords("english"))
+trump_before <- tm_map(trump_before, content_transformer(stemDocument), language = "english")
+trump_before <- tm_map(trump_before, content_transformer(stripWhitespace))
+```
+
+```{r}
+pretrumpdoc <- DocumentTermMatrix(trump_before)
+pretrumpdoc <- removeSparseTerms(pretrumpdoc, .99)
+```
+
+```{r}
+tidytext::tidy(pretrumpdoc)
+tidytrumpbefore <- tidytext::tidy(pretrumpdoc)
+pretrump_mat <- as.matrix(pretrumpdoc)
+pretrump_mat
+```
+
+```{r}
+library(ggplot2)
+tidy(pretrumpdoc) %>% group_by(term) %>%
+  summarize(freq = sum(count)) %>%
+  top_n(20, freq) %>%
+  arrange(desc(freq)) %>%
+  ggplot(aes(reorder(term, -freq), freq)) +
+  geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  xlab("word")
+```
+
+
+```{r}
+trump_after <- VCorpus(VectorSource(as.vector(trump_afterapocalypse$text)))
+trump_after
+trump_after <- tm_map(trump_after, content_transformer(removePunctuation))
+trump_after <- tm_map(trump_after, content_transformer(tolower))
+trump_after <- tm_map(trump_after, removeWords, stopwords("english"))
+trump_after <- tm_map(trump_after, content_transformer(stemDocument), language = "english")
+trump_after <- tm_map(trump_after, content_transformer(stripWhitespace))
+```
+
+```{r}
+posttrumpdoc <- DocumentTermMatrix(trump_after)
+posttrumpdoc <- removeSparseTerms(posttrumpdoc, .99)
+tidytext::tidy(posttrumpdoc)
+tidytrumpafter <- tidytext::tidy(posttrumpdoc)
+posttrump_mat <- as.matrix(posttrumpdoc)
+posttrump_mat
+```
+
+```{r}
+tidy(posttrumpdoc) %>% group_by(term) %>%
+  summarize(freq = sum(count)) %>%
+  top_n(20, freq) %>%
+  arrange(desc(freq)) %>%
+  ggplot(aes(reorder(term, -freq), freq)) +
+  geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  xlab("word")
+```
+
+```{r}
+trumphash <- VCorpus(VectorSource(as.vector(trumptweets$text)))
+trumphash
+trumphash <- tm_map(trumphash, content_transformer(tolower))
+trumphash <- tm_map(trumphash, removeWords, stopwords("english"))
+trumphash <- tm_map(trumphash, content_transformer(stemDocument), language = "english")
+trumphash <- tm_map(trumphash, content_transformer(stripWhitespace))
+
+removeMostPunctuation<-
+function (x, preserve_intra_word_dashes = FALSE) 
+{
+    rmpunct <- function(x) {
+        x <- gsub("#", "\002", x)
+        x <- gsub("[[:punct:]]+", "", x)
+        gsub("\002", "#", x, fixed = TRUE)
+    }
+    if (preserve_intra_word_dashes) { 
+        x <- gsub("(\\w)-(\\w)", "\\1\001\\2", x)
+        x <- rmpunct(x)
+        gsub("\001", "-", x, fixed = TRUE)
+    } else {
+        rmpunct(x)
+    }
+}
+
+trumphash <- tm_map(trumphash, content_transformer(removeMostPunctuation),
+                    preserve_intra_word_dashes = TRUE)
+View(trumphash)
+trumphashdoc <- DocumentTermMatrix(trumphash)
+
+tidyhash <- tidy(trumphashdoc)
+trumphash_mat <- as.matrix(pretrumpdoc)
+
+tidy_dtm.hash <- filter(tidyhash, grepl("^#.*", term))
+dtm.hash <- as.matrix(tidy_dtm.hash)
+View(tidy_dtm.hash)
+
+tidy_dtm.hash %>% group_by(term) %>%
+  summarize(freq = sum(count)) %>%
+  top_n(5, freq) %>%
+  arrange(desc(freq)) %>%
+  ggplot(aes(reorder(term, -freq), freq)) +
+  geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  xlab("word")
+```
+
+
+```{r}
+library(data.table)
+top <- c('#trump2016', '#makeamericagreatagain', '#celebapprentice', '#maga','#celebrityapprentice')
+topwords <- tidy_dtm.hash
+topwords <- topwords %>% filter(word %in% top )
+topwords['time_floor'] <- floor_date(topwords$cleanDate, "month")
+```
+
+
+```{r}
+topwords <- topwords %>% 
+                mutate(celebapprentice = ifelse((word == "#celebapprentice"),1,0)) %>%
+                mutate(makeamericagreatagain = ifelse((word == "#makeamericagreatagain"),1,0)) %>% 
+                mutate(trump2016 = ifelse((word == "#trump2016"),1,0)) %>% 
+                mutate(maga = ifelse((word == "#maga"),1,0)) %>% 
+                mutate(celebrityapprentice = ifelse((word == "#celebrityapprentice"),1,0))
+```
+
+```{r}
+topwords <- topwords[c('time_floor', 'trump2016', 'makeamericagreatagain', 'celebapprentice', 'maga','celebrityapprentice')]
+topwords<- group_by(topwords, time_floor)
+datawords <- data.table(topwords)
+freq<-datawords[, lapply(.SD, sum), by = time_floor]
+dataframe <- data.frame(freq)
+graphwords <- ggplot(freqFrame, aes(x=time_floor)) + 
+        geom_line(aes(y= trump2016), color = "yellow") +
+        geom_line(aes(y=makeamericagreatagain), color = "red") + 
+        geom_line(aes(y=celebapprentice), color = "blue") + 
+        geom_line(aes(y=maga), color = "purple") + 
+        geom_line(aes(y=celebrityapprentice), color = "orange")+
+        xlab("Date") + ylab("Frequency")+ggtitle("Top 5 Hashtags")
+```
+
+```{r}
+tidy_dtm.hash <- trumptweets %>% mutate(text = gsub("[^[:alnum:][:space:]#]", "", text)) %>% mutate(text = gsub("https", " ", text, ignore.case = T)) %>%
+  unnest_tokens(word, text, token = "ngrams", n=2) %>%
+  filter(!word %in% stop_words$word,
+         !word %in% str_remove_all(stop_words$word, "'"),
+         str_detect(word, "[a-z]")) %>% filter(str_detect(word,"crooked hillary"))
+```
+
+
+```{r}
+topwords <- tidy_dtm.hash
+topwords['date'] <- floor_date(topwords$cleanDate, "month")
+topwords['value'] <- 1
+topwords <- topwords[c('date', 'value')]
+top <- data.table(topwords)
+freq2 <-DT[, lapply(.SD, sum), by = date]
+hillary <- data.frame(freq2)
+```
+
+
+```{r}
+
+graphHillary <- ggplot(hillary, aes(x=date, y=value)) + 
+        geom_line() +
+        xlab("Date") + ylab("Frequency") + ggtitle("Crooked Hillary Over Time")
+
+```
+

@@ -1,0 +1,69 @@
+---
+title: "HW4"
+output: pdf_document
+---
+
+```{r}
+
+Packages <-c("readr","dplyr", "ggplot2", "lubridate", "stringr", "foreign", "xml2", "rvest", "tm", "tidytext", "proxy", "modeltools", "topicmodels")
+lapply(Packages, library, character.only = TRUE)
+
+tx_deathrow_full <- read_csv("Downloads/tx_deathrow_full.csv")
+```
+
+```{r}
+texfill <- tx_deathrow_full[!tx_deathrow_full$`Last Statement` == "", ]
+texcorp <- VCorpus(VectorSource(as.vector(tx_deathrow_full$`Last Statement`)))
+
+texcorp <- tm_map(texcorp, content_transformer(removePunctuation))
+texcorp <- tm_map(texcorp, content_transformer(tolower))
+texcorp <- tm_map(texcorp, removeWords, stopwords("english"))
+texcorp <- tm_map(texcorp, content_transformer(stemDocument), language = "english")
+texcorp <- tm_map(texcorp, content_transformer(stripWhitespace))
+```
+
+```{r}
+texDTM <- DocumentTermMatrix(texcorp, control = list(wordLengths = c(2, Inf)))
+
+textot <- apply(texDTM, 1, sum)
+
+texDTM2 <- texDTM[textot > 0, ]
+
+texLDA <- LDA(texDTM2, k = 10)
+
+textidy <- tidy(texLDA)
+```
+
+```{r}
+textopten <- textidy %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+textopten %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+```{r}
+library(stm)
+library(quanteda)
+
+texout <- stm::readCorpus(texDTM, type = "slam")
+summary(texout)
+```
+
+```{r, results = "hide"}
+
+texmod <- stm(documents = texout$documents,vocab = texout$vocab, prevalence = NULL, K = 10, data = tx_deathrow_full$Race,)
+```
+
+```{r}
+summary(texmod)
+```
+
+#One of the biggest things that I noticed initially was the consistency in which "love" and "will" are top terms in frequency for both the STM and LDA versions. Outside of that, there is considerable variation between the two versions and there doesn't seem to be a correlation.
